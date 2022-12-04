@@ -1,50 +1,103 @@
-from pyrogram.errors import UserChannelsTooMuch,FloodWait
-from pyrogram import Client, filters
-from pyrogram.types import ChatJoinRequest, InlineKeyboardButton, InlineKeyboardMarkup
-import os
+import requests as rq
 
-ch1_link=os.environ.get('CH1_LINK','https://t.me/crazebots')
-ch2_link=os.environ.get('CH2_LINK','https://t.me/crazebots')
-
-
-ch1_title=os.environ.get('CH1_TITLE','👉 Channel 1 👈')
-ch2_title=os.environ.get('CH2_TITLE','👉 Channel 2 👈')
-
-
-BOT_TOKEN=os.environ.get('BOT_TOKEN','5423826084:AAG5ESfMQPvDRgVv8dwcWWzgkt6sgVh1Wno')
+from funcs import *
+from queryhandlers import *
 
 API_ID = 16514976
 API_HASH = '40bd8634b3836468bb2fb7eafe39d81a'
-app = Client("ApprovalReqBot", api_id=API_ID,
-             api_hash=API_HASH, bot_token=BOT_TOKEN)
+
+TOKEN = '5696074673:AAFjMo1nelLLuqWtB-G5uYHT64D0ZK-V2iY'
 
 
-@app.on_message(filters.command('start'))
-def start_cmd(_, M):
-    #button2 = [[ InlineKeyboardButton("🆎 About", callback_data="aboutbtn"), InlineKeyboardButton("🆘 Help", callback_data="helpbtn") ],]
-    text = f"Hello {M.from_user.mention} 👋\n\nI'm an auto approve Admin Join Requests Bot.\n\n<b>I can approve users in Groups/Channels.</b>Add me to your chat and promote me to admin with add members permission."
-    app.send_photo(
-        M.chat.id, 'AgACAgEAAxkBAAMrY2kf8xOY7TNIdqa91Mbjxm5jhMAAAiGqMRtCTUlHCF1quWgHoiIACAEAAwIAA3kABx4E', text)
+@bot.on_message(filters.command(['start', 'help']))
+def start_cmd_func(a, msg):
+    user = msg.chat.id
+    Name = msg.chat.first_name
+    a.send_message(user, start_txt.format(name=Name),
+                   disable_web_page_preview=True)
 
 
-button = [[InlineKeyboardButton(f"{ch1_title}", url=f"{ch1_link}")],[InlineKeyboardButton(f"{ch2_title}", url=f"{ch2_link}")],]
-
-@app.on_chat_join_request()
-def reqs_handler(client: app, message: ChatJoinRequest):
-    chatid = message.chat
-
-    user = message.from_user
-
-    try:
-        app.approve_chat_join_request(chatid.id, user.id)
-        app.send_message(user.id, f'<b>Hello</b> {user.mention}\n\nYour Request To Join <b>{chatid.title}</b> has been approved!',reply_markup=InlineKeyboardMarkup(button))
-
-    except UserChannelsTooMuch:
-        pass
-
-    except Exception:
-        print(Exception)
+@bot.on_message(filters.command(['features']))
+def feature_cmd_func(a, msg):
+    user = msg.chat.id
+    Name = msg.chat.first_name
+    a.send_message(user, feature_txt.format(name=Name),
+                   disable_web_page_preview=True)
 
 
-print('Bot Started')
-app.run()
+@bot.on_message(filters.command('api'))
+def add_api_cmd(a, msg):
+    API = filter_api(msg)
+    if API == False:
+        return
+    addAPI(msg, API)
+
+
+@bot.on_message(filters.command('footer'))
+def add_footer_cmd(_, msg):
+    ftr = filter_footer(msg, bot)
+    if ftr == False:
+        return
+    addFooter(msg, ftr)
+
+
+@bot.on_message(filters.command(['unlink', 'remove_api']))
+def remove_api_cmd(_, msg):
+    removeAPI(msg)
+
+
+@bot.on_message(filters.private & filters.media)
+def media_msgs(a, m):
+    chat_ID = m.chat.id
+
+    u_api = userQuery(chat_ID)
+    if u_api == False:
+        m.reply_text(add_api_txt)
+        return
+    Footer = mycol.find_one(chat_ID)
+    footer = (Footer['FOOTER'])
+    if footer == None:
+        footer = ''
+    msg = progress_msg(m)
+    msg.edit_text(f'**{progress_txt}..**')
+
+    caption = convert_post(m.caption, u_api)
+    caption = f'<b>{caption}\n{footer}</b>'
+
+    #msg.edit_text(f'**{failed_txt}** {e}')
+
+    if m.photo != None:
+        a.send_photo(chat_ID, m.photo.file_id, caption)
+
+    if m.video != None:
+        a.send_video(chat_ID, m.video.file_id, caption)
+    if m.document != None:
+        a.send_document(chat_ID, m.document.file_id, caption=caption)
+    if m.animation != None:
+        a.send_animation(chat_ID, m.animation.file_id, caption=caption)
+
+    msg.delete()
+
+
+@bot.on_message(filters.regex(url_ptrn))
+def text_msgs(a, m):
+    chat_ID = m.chat.id
+    u_api = userQuery(chat_ID)
+    if u_api == False:
+        m.reply_text(add_api_txt)
+        return
+    Footer = mycol.find_one(chat_ID)
+    footer = (Footer['FOOTER'])
+    if footer == None:
+        footer = ''
+
+    msg = progress_msg(m)
+    msg.edit_text(f'**{progress_txt}..**')
+    caption = convert_post(m.text, u_api)
+    caption = f'{caption}\n{footer}'
+    text = f'<b>{caption}</b>'
+
+    msg.edit_text(f'{text}', disable_web_page_preview=True)
+
+
+bot.run()
